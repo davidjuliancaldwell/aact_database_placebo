@@ -73,12 +73,18 @@ designTrialCollapsed = design_groups %>% mutate(designGroup = case_when(str_dete
                                                                str_detect(tolower(group_type_comb), pattern = paste('null')) ~ 'No Control Arm Present',
                                                                str_detect(tolower(group_type_comb), pattern = paste('experimental')) ~ 'Experimental Only'))
 
+designTrialCollapsedSummaryCheck <- designTrialCollapsed %>% group_by(designGroup) %>% tally()
+
+
 designTrialCollapsed$design_groups_counted = design_groups_counted$number_of_arms
 
 designTrialCollapsed = designTrialCollapsed %>% mutate(multi_arm = case_when(design_groups_counted==1 ~ 'Single-Arm Trial',
                                                                             (design_groups_counted>1 & designGroup == 'Control Arm Present') ~ 'Control Arm Present',
                                                                              (design_groups_counted>1 & designGroup =='No Control Arm Present') ~ 'No Control Arm Present',
                                                                             (design_groups_counted>1 & designGroup =='Experimental Only') ~ 'No Control Arm Present'))
+
+designTrialCollapsedArmSummaryCheck <- designTrialCollapsed %>% group_by(multi_arm) %>% tally()
+
 
 baseline_counts_tbl = tbl(src=con,'baseline_counts')
 baseline_counts <- baseline_counts_tbl %>% select(nct_id,count) %>% collect()
