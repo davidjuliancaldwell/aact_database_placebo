@@ -59,6 +59,8 @@ designTrial = design_groups %>% mutate(designGroup = case_when(str_detect(tolowe
                                                                           str_detect(tolower(group_type_comb), pattern = paste('null')) ~ 'Null',
                                                                           str_detect(tolower(group_type_comb), pattern = paste('experimental')) ~ 'Experimental Only'))
 
+designTrialSummaryCheck <- designTrial %>% group_by(designGroup) %>% tally()
+
 designTrialCollapsed = design_groups %>% mutate(designGroup = case_when(str_detect(tolower(group_type_comb), pattern = paste('placebo comparator')) ~ 'Control Arm Present',
                                                                str_detect(tolower(group_type_comb), pattern = paste('active comparator')) ~ 'Control Arm Present',
                                                                str_detect(tolower(group_type_comb), pattern = paste('sham')) ~ 'Control Arm Present',
