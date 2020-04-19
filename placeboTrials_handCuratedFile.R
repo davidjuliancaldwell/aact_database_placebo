@@ -31,6 +31,7 @@ handCurated <- handCurated %>% rename(nct_id = NCT.Number)
 startDate = as.Date("2009-01-01")
 countriesList = c("United States")
 `%nin%` = Negate(`%in%`)
+placeboString = c('placebo','standard of care','usual care')
 
 #########################################
 
@@ -39,6 +40,10 @@ drv <- dbDriver('PostgreSQL')
 con <- dbConnect(drv, dbname="aact",host="aact-db.ctti-clinicaltrials.org",user=userAACT,password=passwordAACT,port=5432)
 
 # begin loading, filtering, selecting tables
+
+interventions_tbl = tbl(src=con,'interventions')
+interventions = interventions_tbl %>% select(nct_id,name,description) %>% collect()
+interventions <- interventions %>% filter(nct_id %in% handCurated$nct_id) %>% group_by(nct_id) %>% summarize(name_comb =paste(name,collapse=", "),descrip_comb=paste(description,collapse=", "))
 
 design_groups_tbl = tbl(src=con,'design_groups')
 design_groups <- design_groups_tbl %>% select(nct_id,group_type,title,description) %>% collect()
@@ -78,6 +83,8 @@ designTrialCollapsedSummaryCheck <- designTrialCollapsed %>% group_by(designGrou
 
 designTrialCollapsed$design_groups_counted = design_groups_counted$number_of_arms
 
+
+# will fix any mislabeled experimental arm only trials later with searh
 designTrialCollapsed = designTrialCollapsed %>% mutate(multi_arm = case_when(design_groups_counted==1 ~ 'Single-Arm Trial',
                                                                             (design_groups_counted>1 & designGroup == 'Control Arm Present') ~ 'Control Arm Present',
                                                                              (design_groups_counted>1 & designGroup =='No Control Arm Present') ~ 'No Control Arm Present',
@@ -85,6 +92,8 @@ designTrialCollapsed = designTrialCollapsed %>% mutate(multi_arm = case_when(des
 
 designTrialCollapsedArmSummaryCheck <- designTrialCollapsed %>% group_by(multi_arm) %>% tally()
 
+
+designTrialExamineExperimentalOnly <- designTrialCollapsed %>% filter(design_groups_counted>1 & designGroup == 'Experimental Only')
 
 baseline_counts_tbl = tbl(src=con,'baseline_counts')
 baseline_counts <- baseline_counts_tbl %>% select(nct_id,count) %>% collect()
@@ -134,6 +143,8 @@ sponsorCombined = sponsorCombined %>% filter(nct_id %in% handCurated$nct_id) %>%
                                                                                                                  any(str_detect(tolower(lead_or_collaborator), pattern = paste('collaborator')) & str_detect(tolower(agency_class),pattern='u.s. fed')) ~ 'Public',
                                                                                                                  TRUE ~ 'Other'))
 
+
+
 sponsorCombined = distinct(sponsorCombined,nct_id,.keep_all=TRUE) %>% select(nct_id,fundingComb)
 
 calculatedValues_tbl = tbl(src=con,'calculated_values')
@@ -151,8 +162,11 @@ study_ref <- study_ref_tbl %>% select(nct_id,pmid,reference_type,citation) %>% c
 study_ref_tabulated <- study_ref %>% filter(nct_id %in% handCurated$nct_id) %>% group_by(nct_id) %>% tally()
 study_ref_tabulated <- rename(study_ref_tabulated,pubCount = n)
 
+
+
+
 # this is a join that includes all categories, but only ones that match the description 
-joinedTable <- join_all(list(design_groups_counted,design,designTrialCollapsed,filter_dates,facilities_tabulated,sponsor,sponsorCombined,calculatedValues),by='nct_id',type="full")
+joinedTable <- join_all(list(interventions,design_groups_counted,design,designTrialCollapsed,filter_dates,facilities_tabulated,sponsor,sponsorCombined,calculatedValues),by='nct_id',type="full")
 joinedTable <- joinedTable %>% filter((nct_id %in% locations$nct_id) & (nct_id %in% filter_dates$nct_id))
 
 # get rid of any NA start dates
@@ -169,6 +183,20 @@ joinedTable <- inner_join(joinedTable,handCuratedShrunk,by='nct_id')
 
 
 joinedTable <- joinedTable %>% mutate(yearStart=year(joinedTable$study_first_posted))
+
+# fix NAs for single gorup assignment, by definition now no control arm present 
+joinedTable$multi_arm[is.na(joinedTable$number_of_arms) & joinedTable$intervention_model == 'Single Group Assignment'] = 'Single-Arm Trial' 
+
+# fix multiple experimental arms that have placebo listed under interventions 
+joinedTable$multi_arm[joinedTable$number_of_arms > 1 & joinedTable$designGroup == 'Experimental Only' & str_detect(tolower(joinedTable$name_comb), pattern = paste(placeboString,collapse="|"))] = 'Control Arm Present'
+
+joinedTable$multi_arm[is.na(joinedTable$number_of_arms) & (joinedTable$intervention_model == 'Parallel Assignment' | joinedTable$intervention_model == 'Crossover Assignment' | joinedTable$intervention_model == 'Factorial Group Assignment' | joinedTable$intervention_model == 'Sequential Assignment') & str_detect(tolower(joinedTable$name_comb), pattern = paste(placeboString,collapse="|"))] = 'Control Arm Present'
+joinedTable$multi_arm[is.na(joinedTable$number_of_arms) & (joinedTable$intervention_model == 'Parallel Assignment' | joinedTable$intervention_model == 'Crossover Assignment' | joinedTable$intervention_model == 'Factorial Group Assignment' | joinedTable$intervention_model == 'Sequential Assignment') & str_detect(tolower(joinedTable$name_comb), pattern = paste(placeboString,collapse="|"))] = 'Control Arm Present'
+
+
+# if it didnt have the above, no control arm present
+
+joinedTable$multi_arm[is.na(joinedTable$number_of_arms) & (joinedTable$intervention_model == 'Parallel Assignment' | joinedTable$intervention_model == 'Crossover Assignment' | joinedTable$intervention_model == 'Factorial Group Assignment' | joinedTable$intervention_model == 'Sequential Assignment') & str_detect(tolower(joinedTable$name_comb), pattern = paste(placeboString,collapse="|"),negate=TRUE)] = 'No Control Arm Present'
 
 # count number of missing columns
 joinedTable<- joinedTable %>% mutate(numMissing = rowSums(is.na(.)))
@@ -209,6 +237,7 @@ lengthYC= length(yearlyCount)
 ########################
 if (saveData){
   saveRDS(joinedTable, file = "controlArmRdata_4_17_2020.rds")
+  write.csv(designTrialExamineExperimentalOnly,'experimentalOnly_4_17_2020.csv')
   write.csv(joinedTable,'controlArmTableTotal_4_17_2020.csv')
   write.csv(joinedTableDiverseDiscontinued,'controlArmTableDiscDiverse_4_17_2020.csv')
   write.csv(joinedTableSummarizeInterv,'controlArmTableInterv_4_17_2020.csv')
@@ -228,12 +257,10 @@ if (saveData){
 pInd<-ggplot(joinedTableCount, aes(x=yearStart,y=yearlyCount, group=multi_arm, color=multi_arm)) +
   geom_line()+
   geom_point() +
-  labs(title="Number of Cardiovascular Clinical Trials \nRegistered by Control Arm Status, by Year",x = "Year Registered",y="Number of Trials") +
+  labs(title="Number of Cardiovascular Clinical Trials \nRegistered by Control Arm Status, by Year",x = "Year Registered",y="Number of Trials",color='Control Arm Status') +
   ylim(0,max(joinedTableCount$yearlyCount)+10) +
   scale_x_continuous(breaks=seq(2009,2019,1),limits=c(2009,2019)) + 
-  scale_color_jama() +
-  labs(color = 'Control Arm Status Specific Enrollment ')
-
+  scale_color_jama() 
 print(pInd)
 if (savePlot){
   ggsave("trialsByYearMultiArm_4_17_2020.png", units="in", width=5, height=4, dpi=600)
@@ -241,8 +268,9 @@ if (savePlot){
 
 pHist<-ggplot(joinedTable, aes(x=number_of_arms,color=multi_arm,fill=multi_arm)) +
   geom_histogram(binwidth=1,alpha=0.5) +
-  labs(x = "Number of Arms",y="Count") +
-  xlim(0,max(joinedTable$number_of_arms)) 
+  labs(x = "Number of Arms",y="Count",fill='Control Arm Status') +
+  xlim(0,max(joinedTable$number_of_arms)) +
+  guides(color=False)
 print(pHist)
 if (savePlot){
   ggsave("trialsByYearHist_4_17_2020.png", units="in", width=5, height=4, dpi=600)
