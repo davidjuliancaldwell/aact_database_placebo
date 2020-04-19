@@ -191,11 +191,8 @@ joinedTable$multi_arm[is.na(joinedTable$number_of_arms) & joinedTable$interventi
 joinedTable$multi_arm[joinedTable$number_of_arms > 1 & joinedTable$designGroup == 'Experimental Only' & str_detect(tolower(joinedTable$name_comb), pattern = paste(placeboString,collapse="|"))] = 'Control Arm Present'
 
 joinedTable$multi_arm[is.na(joinedTable$number_of_arms) & (joinedTable$intervention_model == 'Parallel Assignment' | joinedTable$intervention_model == 'Crossover Assignment' | joinedTable$intervention_model == 'Factorial Group Assignment' | joinedTable$intervention_model == 'Sequential Assignment') & str_detect(tolower(joinedTable$name_comb), pattern = paste(placeboString,collapse="|"))] = 'Control Arm Present'
-joinedTable$multi_arm[is.na(joinedTable$number_of_arms) & (joinedTable$intervention_model == 'Parallel Assignment' | joinedTable$intervention_model == 'Crossover Assignment' | joinedTable$intervention_model == 'Factorial Group Assignment' | joinedTable$intervention_model == 'Sequential Assignment') & str_detect(tolower(joinedTable$name_comb), pattern = paste(placeboString,collapse="|"))] = 'Control Arm Present'
-
 
 # if it didnt have the above, no control arm present
-
 joinedTable$multi_arm[is.na(joinedTable$number_of_arms) & (joinedTable$intervention_model == 'Parallel Assignment' | joinedTable$intervention_model == 'Crossover Assignment' | joinedTable$intervention_model == 'Factorial Group Assignment' | joinedTable$intervention_model == 'Sequential Assignment') & str_detect(tolower(joinedTable$name_comb), pattern = paste(placeboString,collapse="|"),negate=TRUE)] = 'No Control Arm Present'
 
 # count number of missing columns
@@ -263,14 +260,14 @@ pInd<-ggplot(joinedTableCount, aes(x=yearStart,y=yearlyCount, group=multi_arm, c
   scale_color_jama() 
 print(pInd)
 if (savePlot){
-  ggsave("trialsByYearMultiArm_4_17_2020.png", units="in", width=5, height=4, dpi=600)
+  ggsave("trialsByYearMultiArm_4_17_2020.png", units="in", width=6, height=4, dpi=600)
 }
 
 pHist<-ggplot(joinedTable, aes(x=number_of_arms,color=multi_arm,fill=multi_arm)) +
   geom_histogram(binwidth=1,alpha=0.5) +
   labs(x = "Number of Arms",y="Count",fill='Control Arm Status') +
   xlim(0,max(joinedTable$number_of_arms)) +
-  guides(color=False)
+  guides(color=FALSE)
 print(pHist)
 if (savePlot){
   ggsave("trialsByYearHist_4_17_2020.png", units="in", width=5, height=4, dpi=600)
