@@ -4,6 +4,7 @@ library(tidyr)
 library(RPostgreSQL)
 library(plyr)
 library(dplyr)
+library(readr)
 library(stringr)
 library(lubridate)
 library(ggplot2)
@@ -11,6 +12,8 @@ library(ggsci)
 library(gridExtra)
 library(cowplot)
 library(here)
+library(sjPlot)
+
 #########################################
 # boolean values for saving, username and password for accessing AACT database
 
@@ -18,13 +21,26 @@ savePlot = FALSE
 saveData = FALSE
 userAACT="djcald"
 passwordAACT="DD968radford"
+path_to_data = here('data_files')
 
 #########################################
 # set up data directories, load in hand curated file
-rootDir = here()
-dataFile = here("placebo.csv")
-handCurated <- read.csv(file=dataFile, header=TRUE, sep=",",na.strings=c(""))
-handCurated <- handCurated %>% rename(nct_id = NCT.Number)
+#dataFile = here("Combination_Cardiac_Search.csv")
+#dataFile1 = here("CVA_Cerebro Search.csv")
+#dataFile2 = here("Heart Failure Search.csv")
+#dataFile3 = here("Arrhythmia Search.csv")
+#dataFile4 = here("ACS related Search.csv")
+#dataFile5 = here("Cholesterol and BP Search.csv")
+
+
+handCurated <- list.files(path=path_to_data,full.names = TRUE) %>%
+  lapply(read_csv) %>% bind_rows
+
+#  read.csv(file=dataFile, header=TRUE, sep=",",na.strings=c(""))
+
+handCurated <- handCurated %>% rename(nct_id = 'NCT Number')
+handCurated = distinct(handCurated,nct_id,.keep_all=TRUE) 
+
 
 #########################################
 # create search parameters
@@ -163,8 +179,6 @@ study_ref_tabulated <- study_ref %>% filter(nct_id %in% handCurated$nct_id) %>% 
 study_ref_tabulated <- rename(study_ref_tabulated,pubCount = n)
 
 
-
-
 # this is a join that includes all categories, but only ones that match the description 
 joinedTable <- join_all(list(interventions,design_groups_counted,design,designTrialCollapsed,filter_dates,facilities_tabulated,sponsor,sponsorCombined,calculatedValues),by='nct_id',type="full")
 joinedTable <- joinedTable %>% filter((nct_id %in% locations$nct_id) & (nct_id %in% filter_dates$nct_id))
@@ -207,8 +221,11 @@ joinedTable <- joinedTable %>% mutate(industryNonIndustry = case_when(str_detect
                                                                           TRUE ~ 'Non-Industry Sponsor'))
 
 # group by year and multi-arm group 
-joinedTableCount <- joinedTable %>% group_by(yearStart,multi_arm) %>% tally()
+joinedTableCount <- joinedTable %>% group_by(yearStart,multi_arm) %>%
+  summarize(n=n()) %>%
+  mutate(freq = n/sum(n))
 joinedTableCount <- rename(joinedTableCount,yearlyCount = n)
+
 
 # calculate statistics
 joinedTableTotals <- joinedTable %>% group_by(multi_arm) %>% tally()
@@ -231,21 +248,29 @@ yearlyCount = joinedTableCount$yearlyCount
 lengthYC= length(yearlyCount)
 
 
+stat_model <- lm(freq~yearStart,joinedTableCount)
+summary(stat_model)
+tab_model(stat_model)
+
+stat_model_group <- lm(freq~yearStart+multi_arm,joinedTableCount)
+summary(stat_model_group)
+tab_model(stat_model_group)
+
 ########################
 if (saveData){
-  saveRDS(joinedTable, file = "controlArmRdata_4_17_2020.rds")
-  write.csv(designTrialExamineExperimentalOnly,'experimentalOnly_4_17_2020.csv')
-  write.csv(joinedTable,'controlArmTableTotal_4_17_2020.csv')
-  write.csv(joinedTableDiverseDiscontinued,'controlArmTableDiscDiverse_4_17_2020.csv')
-  write.csv(joinedTableSummarizeInterv,'controlArmTableInterv_4_17_2020.csv')
-  write.csv(joinedTableSummarizeType,'controlArmTableType_4_17_2020.csv')
-  write.csv(joinedTableSummarizePhase,'controlArmTablePhase_4_17_2020.csv')
-  write.csv(joinedTableSummarizeAgency,'controlArmTableAgency_4_17_2020.csv')
-  write.csv(joinedTableSummarizeReported,'controlArmTableReported_4_17_2020.csv')
-  write.csv(joinedTableSummarizeSite,'controlArmTableSite_4_17_2020.csv')
-  write.csv(joinedTableSummarizeStatus,'controlArmTableStatus_4_17_2020.csv')
-  write.csv(joinedTableSummarizeOverallStatus,'controlArmTableOverallStatus_4_17_2020.csv')
-  write.csv(joinedTableSummarizePubCount,'controlArmTablePubCount_4_17_2020.csv')
+  saveRDS(joinedTable, file = "controlArmRdata_5_11_2020.rds")
+  write.csv(designTrialExamineExperimentalOnly,'experimentalOnly_5_11_2020.csv')
+  write.csv(joinedTable,'controlArmTableTotal_5_11_2020.csv')
+  write.csv(joinedTableDiverseDiscontinued,'controlArmTableDiscDiverse_5_11_2020.csv')
+  write.csv(joinedTableSummarizeInterv,'controlArmTableInterv_5_11_2020.csv')
+  write.csv(joinedTableSummarizeType,'controlArmTableType_5_11_2020.csv')
+  write.csv(joinedTableSummarizePhase,'controlArmTablePhase_5_11_2020.csv')
+  write.csv(joinedTableSummarizeAgency,'controlArmTableAgency_5_11_2020.csv')
+  write.csv(joinedTableSummarizeReported,'controlArmTableReported_5_11_2020.csv')
+  write.csv(joinedTableSummarizeSite,'controlArmTableSite_5_11_2020.csv')
+  write.csv(joinedTableSummarizeStatus,'controlArmTableStatus_5_11_2020.csv')
+  write.csv(joinedTableSummarizeOverallStatus,'controlArmTableOverallStatus_5_11_2020.csv')
+  write.csv(joinedTableSummarizePubCount,'controlArmTablePubCount_5_11_2020.csv')
 }
 
 #########################################
@@ -260,7 +285,7 @@ pInd<-ggplot(joinedTableCount, aes(x=yearStart,y=yearlyCount, group=multi_arm, c
   scale_color_jama() 
 print(pInd)
 if (savePlot){
-  ggsave("trialsByYearMultiArm_4_17_2020.png", units="in", width=6, height=4, dpi=600)
+  ggsave("trialsByYearMultiArm_5_11_2020.png", units="in", width=6, height=4, dpi=600)
 }
 
 pHist<-ggplot(joinedTable, aes(x=number_of_arms,color=multi_arm,fill=multi_arm)) +
@@ -270,6 +295,6 @@ pHist<-ggplot(joinedTable, aes(x=number_of_arms,color=multi_arm,fill=multi_arm))
   guides(color=FALSE)
 print(pHist)
 if (savePlot){
-  ggsave("trialsByYearHist_4_17_2020.png", units="in", width=5, height=4, dpi=600)
+  ggsave("trialsByYearHist_5_11_2020.png", units="in", width=5, height=4, dpi=600)
 }
 
