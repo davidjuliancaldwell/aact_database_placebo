@@ -48,6 +48,8 @@ startDate = as.Date("2009-01-01")
 countriesList = c("United States")
 `%nin%` = Negate(`%in%`)
 placeboString = c('placebo','standard of care','usual care')
+placeboStringOnly = c('placebo')
+standardCareString = c('standard of care','usual care')
 
 #########################################
 
@@ -226,6 +228,30 @@ joinedTableCount <- joinedTable %>% group_by(yearStart,multi_arm) %>%
   mutate(freq = n/sum(n))
 joinedTableCount <- rename(joinedTableCount,yearlyCount = n)
 
+# add in information about placebo, active comparator, both 
+joinedTable <- joinedTable %>% mutate(active_placebo = case_when((str_detect(tolower(group_type_comb), pattern = paste('placebo comparator'))) & (str_detect(tolower(group_type_comb), pattern = paste('active comparator')))~ 'Active & Placebo Present',
+                                                                        str_detect(tolower(name_comb),  pattern = paste(placeboStringOnly,collapse="|")) ~ 'Placebo Comparator',
+                                                                        str_detect(tolower(name_comb),  pattern = paste(standardCareString,collapse="|")) ~ 'Placebo Comparator',
+                                                                        str_detect(tolower(group_type_comb), pattern = paste('active comparator')) ~ 'Active Comparator',
+                                                                        str_detect(tolower(group_type_comb), pattern = paste('placebo comparator')) ~ 'Placebo Comparator'))
+
+
+
+
+joinedTableFix <- joinedTable %>% filter((multi_arm != 'Control Arm Present') & (!is.na(active_placebo))) %>% mutate(multi_arm = case_when((str_detect(tolower(name_comb),pattern = paste(placeboStringOnly,collapse="|"))) |(str_detect(tolower(descrip_comb),pattern = paste(placeboStringOnly,collapse="|"))) ~'Control Arm Present',
+                                                                                                                                           str_detect(tolower(designGroup),pattern='control arm present') ~ 'Control Arm Present'))
+
+
+joinedTable$multi_arm[(joinedTable$multi_arm != 'Control Arm Present') & (!is.na(joinedTable$active_placebo))] = joinedTableFix$multi_arm
+
+joinedTableCheck <- joinedTable %>% filter((multi_arm != 'Control Arm Present') & (!is.na(active_placebo)))
+
+joinedTableActivePlacebo <- joinedTable %>% group_by(active_placebo) %>% tally()
+
+joinedTableDoubleCheck <- joinedTable %>% filter((multi_arm != 'Control Arm Present') & ((active_placebo == 'Active & Placebo Present') | (active_placebo == 'Active Comparator') | (active_placebo == 'Placebo Comparator') ))
+
+
+joinedTableTripleCheck <- joinedTable %>% filter((multi_arm == 'Control Arm Present') & (is.na(active_placebo)))
 
 # calculate statistics
 joinedTableTotals <- joinedTable %>% group_by(multi_arm) %>% tally()
