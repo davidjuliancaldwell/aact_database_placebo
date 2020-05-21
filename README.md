@@ -2,7 +2,7 @@
 
 This is the R code to parse ClinicalTrials.gov data compiled by AACT. Running the file **"placeboTrials_handCuratedFile.R"** will reproduce the figures and generate the compiled data
 
-The source directory/working directory should be set to wherever this R file is saved, and the csv file **"placebo.csv"** should be within the same directory.
+The source directory/working directory should be set to wherever this R file is saved, and the csv files in **data_files** should be placed in a **data_files** directory on the same directory level as the **placeboTrials_handCuratedFile.R** file.
 
 Before running this file, an individual must make an account with the
 AACT website via the following link.  

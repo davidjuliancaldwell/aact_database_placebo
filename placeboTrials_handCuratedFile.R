@@ -19,8 +19,8 @@ library(sjPlot)
 
 savePlot = TRUE
 saveData = TRUE
-userAACT="USER_NAME"
-passwordAACT="PASSWORD"
+userAACT="djcald"
+passwordAACT="DD968radford"
 path_to_data = here('data_files')
 
 #########################################
@@ -180,7 +180,6 @@ study_ref <- study_ref_tbl %>% select(nct_id,pmid,reference_type,citation) %>% c
 study_ref_tabulated <- study_ref %>% filter(nct_id %in% handCurated$nct_id) %>% group_by(nct_id) %>% tally()
 study_ref_tabulated <- rename(study_ref_tabulated,pubCount = n)
 
-
 # this is a join that includes all categories, but only ones that match the description 
 joinedTable <- join_all(list(interventions,design_groups_counted,design,designTrialCollapsed,filter_dates,facilities_tabulated,sponsor,sponsorCombined,calculatedValues),by='nct_id',type="full")
 joinedTable <- joinedTable %>% filter((nct_id %in% locations$nct_id) & (nct_id %in% filter_dates$nct_id) & (nct_id %in% calculatedValues$nct_id))
@@ -197,45 +196,12 @@ joinedTable <- joinedTable %>% mutate(pubCountBool = case_when(!is.na(pubCount) 
 handCuratedShrunk <- handCurated %>% filter(nct_id %in% joinedTable$nct_id) %>% collect()
 joinedTable <- inner_join(joinedTable,handCuratedShrunk,by='nct_id')
 
-# re-ensure that age selection takes place
-
 joinedTable <- joinedTable %>% mutate(yearStart=year(joinedTable$study_first_posted))
 
-# fix NAs for single gorup assignment, by definition now no control arm present 
-joinedTable$multi_arm[is.na(joinedTable$number_of_arms) & joinedTable$intervention_model == 'Single Group Assignment'] = 'Single-Arm Trial' 
-
-# fix multiple experimental arms that have placebo listed under interventions 
-joinedTable$multi_arm[joinedTable$number_of_arms > 1 & joinedTable$designGroup == 'Experimental Only' & str_detect(tolower(joinedTable$name_comb), pattern = paste(placeboString,collapse="|"))] = 'Control Arm Present'
-
-joinedTable$multi_arm[is.na(joinedTable$number_of_arms) & (joinedTable$intervention_model == 'Parallel Assignment' | joinedTable$intervention_model == 'Crossover Assignment' | joinedTable$intervention_model == 'Factorial Group Assignment' | joinedTable$intervention_model == 'Sequential Assignment') & str_detect(tolower(joinedTable$name_comb), pattern = paste(placeboString,collapse="|"))] = 'Control Arm Present'
-
-# if it didnt have the above, no control arm present
+# first pass of quality control, if a trial doesnt have a number of arms, and no placebo listed, then no control arm present/
+# trials that have other matching criteria are added below 
 joinedTable$multi_arm[is.na(joinedTable$number_of_arms) & (joinedTable$intervention_model == 'Parallel Assignment' | joinedTable$intervention_model == 'Crossover Assignment' | joinedTable$intervention_model == 'Factorial Group Assignment' | joinedTable$intervention_model == 'Sequential Assignment') & str_detect(tolower(joinedTable$name_comb), pattern = paste(placeboString,collapse="|"),negate=TRUE)] = 'No Control Arm Present'
-
-# count number of missing columns
-joinedTable<- joinedTable %>% mutate(numMissing = rowSums(is.na(.)))
-
-# double check that no trials are double counted
-doubleCounts <- joinedTable %>% group_by(nct_id) %>% summarise(count=n())
-unique(doubleCounts$count)
-
-# add in industry vs. non industry
-joinedTable <- joinedTable %>% mutate(industryNonIndustry = case_when(str_detect(tolower(funding), pattern = paste('industry')) ~ 'Industry Sponsor',
-                                                                          TRUE ~ 'Non-Industry Sponsor'))
-
-# add in information about placebo, active comparator, both 
-joinedTable <- joinedTable %>% mutate(active_placebo = case_when((str_detect(tolower(group_type_comb), pattern = paste('placebo comparator'))) & (str_detect(tolower(group_type_comb), pattern = paste('active comparator')))~ 'Active & Placebo Present',
-                                                                        str_detect(tolower(name_comb),  pattern = paste(placeboStringOnly,collapse="|")) ~ 'Placebo Comparator',
-                                                                        str_detect(tolower(name_comb),  pattern = paste(standardCareString,collapse="|")) ~ 'Placebo Comparator',
-                                                                        str_detect(tolower(group_type_comb), pattern = paste('active comparator')) ~ 'Active Comparator',
-                                                                        str_detect(tolower(group_type_comb), pattern = paste('placebo comparator')) ~ 'Placebo Comparator'))
-
-joinedTableFix <- joinedTable %>% filter((multi_arm != 'Control Arm Present') & (!is.na(active_placebo))) %>% mutate(multi_arm = case_when((str_detect(tolower(name_comb),pattern = paste(placeboStringOnly,collapse="|"))) |(str_detect(tolower(descrip_comb),pattern = paste(placeboStringOnly,collapse="|"))) ~'Control Arm Present',
-                                                                                                                                           str_detect(tolower(designGroup),pattern='control arm present') ~ 'Control Arm Present'))
-
-
-joinedTable$multi_arm[(joinedTable$multi_arm != 'Control Arm Present') & (!is.na(joinedTable$active_placebo))] = joinedTableFix$multi_arm
-
+noArmsListed = joinedTable[is.na(joinedTable$number_of_arms) & (joinedTable$intervention_model == 'Parallel Assignment' | joinedTable$intervention_model == 'Crossover Assignment' | joinedTable$intervention_model == 'Factorial Group Assignment' | joinedTable$intervention_model == 'Sequential Assignment') & str_detect(tolower(joinedTable$name_comb), pattern = paste(placeboString,collapse="|"),negate=TRUE),]
 
 # get rid of sham AV trial
 joinedTable <- joinedTable %>% filter(nct_id != 'NCT03483051')
@@ -290,14 +256,59 @@ joinedTable$number_of_arms[joinedTable$nct_id == 'NCT02906579'] = 2
 joinedTable$active_placebo[joinedTable$nct_id == 'NCT02906579'] = 'Placebo Comparator'
 joinedTable$intervention_model[joinedTable$nct_id == 'NCT02906579'] = 'Parallel Assignment'
 
+# fix NAs for single gorup assignment, by definition now no control arm present 
+joinedTable$multi_arm[is.na(joinedTable$number_of_arms) & joinedTable$intervention_model == 'Single Group Assignment'] = 'Single-Arm Trial' 
+
+# fix multiple experimental arms that have placebo listed under interventions 
+joinedTable$multi_arm[joinedTable$number_of_arms > 1 & joinedTable$designGroup == 'Experimental Only' & str_detect(tolower(joinedTable$name_comb), pattern = paste(placeboString,collapse="|"))] = 'Control Arm Present'
+
+joinedTable$multi_arm[joinedTable$active_placebo == 'Placebo Comparator' | joinedTable$active_placebo == 'Active & Placebo Present' | joinedTable$active_placebo == 'Active Comparator']= 'Control Arm Present'
+
+
+joinedTable$multi_arm[is.na(joinedTable$number_of_arms) & (joinedTable$intervention_model == 'Parallel Assignment' | joinedTable$intervention_model == 'Crossover Assignment' | joinedTable$intervention_model == 'Factorial Group Assignment' | joinedTable$intervention_model == 'Sequential Assignment') & str_detect(tolower(joinedTable$name_comb), pattern = paste(placeboString,collapse="|"))] = 'Control Arm Present'
+
+
+# count number of missing columns
+joinedTable<- joinedTable %>% mutate(numMissing = rowSums(is.na(.)))
+
+# double check that no trials are double counted
+doubleCounts <- joinedTable %>% group_by(nct_id) %>% summarise(count=n())
+unique(doubleCounts$count)
+
+# add in industry vs. non industry
+joinedTable <- joinedTable %>% mutate(industryNonIndustry = case_when(str_detect(tolower(funding), pattern = paste('industry')) ~ 'Industry Sponsor',
+                                                                          TRUE ~ 'Non-Industry Sponsor'))
+
+# add in information about placebo, active comparator, both 
+joinedTable <- joinedTable %>% mutate(active_placebo = case_when((str_detect(tolower(group_type_comb), pattern = paste('placebo comparator'))) & (str_detect(tolower(group_type_comb), pattern = paste('active comparator')))~ 'Active & Placebo Present',
+                                                                        str_detect(tolower(name_comb),  pattern = paste(placeboStringOnly,collapse="|")) ~ 'Placebo Comparator',
+                                                                        str_detect(tolower(name_comb),  pattern = paste(standardCareString,collapse="|")) ~ 'Placebo Comparator',
+                                                                        str_detect(tolower(group_type_comb), pattern = paste('active comparator')) ~ 'Active Comparator',
+                                                                        str_detect(tolower(group_type_comb), pattern = paste('placebo comparator')) ~ 'Placebo Comparator'))
+
+joinedTableFix <- joinedTable %>% filter((multi_arm != 'Control Arm Present') & (!is.na(active_placebo))) %>% mutate(multi_arm = case_when((str_detect(tolower(name_comb),pattern = paste(placeboStringOnly,collapse="|"))) |(str_detect(tolower(descrip_comb),pattern = paste(placeboStringOnly,collapse="|"))) ~'Control Arm Present',
+                                                                                                                                           str_detect(tolower(designGroup),pattern='control arm present') ~ 'Control Arm Present'))
+
+
+joinedTable$multi_arm[(joinedTable$multi_arm != 'Control Arm Present') & (!is.na(joinedTable$active_placebo))] = joinedTableFix$multi_arm
+
 # done processing, now do checks, totals, and calculations 
 
 joinedTableCheck <- joinedTable %>% filter((multi_arm != 'Control Arm Present') & (!is.na(active_placebo)))
 
-joinedTableActivePlacebo <- joinedTable %>% group_by(active_placebo) %>% tally()
+joinedTableActivePlacebo <- joinedTable %>% filter(multi_arm=='Control Arm Present') %>% group_by(active_placebo) %>% tally()
+joinedTableWhichDesign <- joinedTable %>% filter(multi_arm=='Control Arm Present') %>% group_by(intervention_model) %>% tally()
+joinedTableWhichDesignTrials <- joinedTable %>% filter(multi_arm=='Control Arm Present') %>% group_by(intervention_model)
+
+joinedTableActivePlaceboCheck <- joinedTable %>% filter(multi_arm!='Control Arm Present') %>% group_by(active_placebo) %>% tally()
+joinedTableWhichDesignCheck <- joinedTable %>% filter(multi_arm!='Control Arm Present') %>% group_by(intervention_model) %>% tally()
+
+joinedTableActivePlaceboCheckNoCtrl <- joinedTable %>% filter(multi_arm=='No Control Arm Present') %>% group_by(active_placebo) %>% tally()
+joinedTableWhichDesignCheckNoCtrl <- joinedTable %>% filter(multi_arm=='No Control Arm Present') %>% group_by(intervention_model) %>% tally()
+joinedTableWhichDesignCheckNoCtrlTrials <- joinedTable %>% filter(multi_arm=='No Control Arm Present') %>% group_by(intervention_model)
+
 
 joinedTableDoubleCheck <- joinedTable %>% filter((multi_arm != 'Control Arm Present') & ((active_placebo == 'Active & Placebo Present') | (active_placebo == 'Active Comparator') | (active_placebo == 'Placebo Comparator') ))
-
 joinedTableTripleCheck <- joinedTable %>% filter((multi_arm == 'Control Arm Present') & (is.na(active_placebo)))
 
 # group by year and multi-arm group 
