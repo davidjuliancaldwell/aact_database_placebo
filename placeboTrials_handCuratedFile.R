@@ -19,8 +19,8 @@ library(sjPlot)
 
 savePlot = TRUE
 saveData = TRUE
-userAACT="djcald"
-passwordAACT="DD968radford"
+userAACT="USER_NAME"
+passwordAACT="PASSWORD"
 path_to_data = here('data_files')
 
 #########################################
