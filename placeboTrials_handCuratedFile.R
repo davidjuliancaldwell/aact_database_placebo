@@ -242,11 +242,11 @@ joinedTable <- joinedTable %>% filter(nct_id != 'NCT03483051')
 # do all the manual curation
 
 joinedTable$number_of_arms[joinedTable$nct_id == 'NCT00839891'] = 3 
-joinedTable$active_placebo[joinedTable$nct_id == 'NCT00839891'] = 'Active and Placebo Present'
+joinedTable$active_placebo[joinedTable$nct_id == 'NCT00839891'] = 'Active & Placebo Present'
 joinedTable$intervention_model[joinedTable$nct_id == 'NCT00839891'] = 'Parallel Assignment'
 
 joinedTable$number_of_arms[joinedTable$nct_id == 'NCT00996021'] = 3 
-joinedTable$active_placebo[joinedTable$nct_id == 'NCT00996021'] = 'Active and Placebo Present'
+joinedTable$active_placebo[joinedTable$nct_id == 'NCT00996021'] = 'Active & Placebo Present'
 joinedTable$intervention_model[joinedTable$nct_id == 'NCT00996021'] = 'Crossover Assignment'
 
 joinedTable$number_of_arms[joinedTable$nct_id == 'NCT01328054'] = 2
