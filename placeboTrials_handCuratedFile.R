@@ -17,10 +17,10 @@ library(sjPlot)
 #########################################
 # boolean values for saving, username and password for accessing AACT database
 
-savePlot = FALSE
-saveData = FALSE
-userAACT="djcald"
-passwordAACT="DD968radford"
+savePlot = TRUE
+saveData = TRUE
+userAACT="USER_NAME"
+passwordAACT="PASSWORD"
 path_to_data = here('data_files')
 
 #########################################
@@ -183,7 +183,7 @@ study_ref_tabulated <- rename(study_ref_tabulated,pubCount = n)
 
 # this is a join that includes all categories, but only ones that match the description 
 joinedTable <- join_all(list(interventions,design_groups_counted,design,designTrialCollapsed,filter_dates,facilities_tabulated,sponsor,sponsorCombined,calculatedValues),by='nct_id',type="full")
-joinedTable <- joinedTable %>% filter((nct_id %in% locations$nct_id) & (nct_id %in% filter_dates$nct_id))
+joinedTable <- joinedTable %>% filter((nct_id %in% locations$nct_id) & (nct_id %in% filter_dates$nct_id) & (nct_id %in% calculatedValues$nct_id))
 
 # get rid of any NA start dates
 #joinedTable <- joinedTable[complete.cases(joinedTable$start_date),]
@@ -197,6 +197,7 @@ joinedTable <- joinedTable %>% mutate(pubCountBool = case_when(!is.na(pubCount) 
 handCuratedShrunk <- handCurated %>% filter(nct_id %in% joinedTable$nct_id) %>% collect()
 joinedTable <- inner_join(joinedTable,handCuratedShrunk,by='nct_id')
 
+# re-ensure that age selection takes place
 
 joinedTable <- joinedTable %>% mutate(yearStart=year(joinedTable$study_first_posted))
 
@@ -318,6 +319,7 @@ joinedTableSummarizeSite<- joinedTable %>% group_by(multi_arm,multisite) %>% tal
 joinedTableSummarizeStatus<- joinedTable %>% group_by(multi_arm,last_known_status) %>% tally()
 joinedTableSummarizeOverallStatus <- joinedTable %>% group_by(multi_arm,overall_status) %>% tally()
 joinedTableSummarizePubCount <- joinedTable %>% group_by(multi_arm,pubCountBool) %>% tally()
+joinedTableMedianNumbers <- joinedTable %>% group_by(multi_arm) %>% summarize(median=median(enrollment,na.rm=TRUE),iqr = IQR(enrollment,na.rm=TRUE))
 
 #########################################
 # statistical testing
@@ -336,19 +338,19 @@ tab_model(stat_model_group)
 
 ########################
 if (saveData){
-  saveRDS(joinedTable, file = "controlArmRdata_5_11_2020.rds")
-  write.csv(designTrialExamineExperimentalOnly,'experimentalOnly_5_11_2020.csv')
-  write.csv(joinedTable,'controlArmTableTotal_5_11_2020.csv')
-  write.csv(joinedTableDiverseDiscontinued,'controlArmTableDiscDiverse_5_11_2020.csv')
-  write.csv(joinedTableSummarizeInterv,'controlArmTableInterv_5_11_2020.csv')
-  write.csv(joinedTableSummarizeType,'controlArmTableType_5_11_2020.csv')
-  write.csv(joinedTableSummarizePhase,'controlArmTablePhase_5_11_2020.csv')
-  write.csv(joinedTableSummarizeAgency,'controlArmTableAgency_5_11_2020.csv')
-  write.csv(joinedTableSummarizeReported,'controlArmTableReported_5_11_2020.csv')
-  write.csv(joinedTableSummarizeSite,'controlArmTableSite_5_11_2020.csv')
-  write.csv(joinedTableSummarizeStatus,'controlArmTableStatus_5_11_2020.csv')
-  write.csv(joinedTableSummarizeOverallStatus,'controlArmTableOverallStatus_5_11_2020.csv')
-  write.csv(joinedTableSummarizePubCount,'controlArmTablePubCount_5_11_2020.csv')
+  saveRDS(joinedTable, file = "controlArmRdata_5_21_2020.rds")
+  write.csv(designTrialExamineExperimentalOnly,'experimentalOnly_5_21_2020.csv')
+  write.csv(joinedTable,'controlArmTableTotal_5_21_2020.csv')
+  write.csv(joinedTableDiverseDiscontinued,'controlArmTableDiscDiverse_5_21_2020.csv')
+  write.csv(joinedTableSummarizeInterv,'controlArmTableInterv_5_21_2020.csv')
+  write.csv(joinedTableSummarizeType,'controlArmTableType_5_21_2020.csv')
+  write.csv(joinedTableSummarizePhase,'controlArmTablePhase_5_21_2020.csv')
+  write.csv(joinedTableSummarizeAgency,'controlArmTableAgency_5_21_2020.csv')
+  write.csv(joinedTableSummarizeReported,'controlArmTableReported_5_21_2020.csv')
+  write.csv(joinedTableSummarizeSite,'controlArmTableSite_5_21_2020.csv')
+  write.csv(joinedTableSummarizeStatus,'controlArmTableStatus_5_21_2020.csv')
+  write.csv(joinedTableSummarizeOverallStatus,'controlArmTableOverallStatus_5_21_2020.csv')
+  write.csv(joinedTableSummarizePubCount,'controlArmTablePubCount_5_21_2020.csv')
 }
 
 #########################################
@@ -363,16 +365,16 @@ pInd<-ggplot(joinedTableCount, aes(x=yearStart,y=yearlyCount, group=multi_arm, c
   scale_color_jama() 
 print(pInd)
 if (savePlot){
-  ggsave("trialsByYearMultiArm_5_11_2020.png", units="in", width=6, height=4, dpi=600)
+  ggsave("trialsByYearMultiArm_5_21_2020.png", units="in", width=6, height=4, dpi=600)
 }
 
 pHist<-ggplot(joinedTable, aes(x=number_of_arms,color=multi_arm,fill=multi_arm)) +
   geom_histogram(binwidth=1,alpha=0.5) +
   labs(x = "Number of Arms",y="Count",fill='Control Arm Status') +
-  xlim(0,max(joinedTable$number_of_arms)) +
+  coord_cartesian(xlim=c(0,max(joinedTable$number_of_arms,na.rm = TRUE)))  + 
   guides(color=FALSE)
 print(pHist)
 if (savePlot){
-  ggsave("trialsByYearHist_5_11_2020.png", units="in", width=5, height=4, dpi=600)
+  ggsave("trialsByYearHist_5_21_2020.png", units="in", width=5, height=4, dpi=600)
 }
 
