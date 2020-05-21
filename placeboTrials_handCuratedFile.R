@@ -222,12 +222,6 @@ unique(doubleCounts$count)
 joinedTable <- joinedTable %>% mutate(industryNonIndustry = case_when(str_detect(tolower(funding), pattern = paste('industry')) ~ 'Industry Sponsor',
                                                                           TRUE ~ 'Non-Industry Sponsor'))
 
-# group by year and multi-arm group 
-joinedTableCount <- joinedTable %>% group_by(yearStart,multi_arm) %>%
-  summarize(n=n()) %>%
-  mutate(freq = n/sum(n))
-joinedTableCount <- rename(joinedTableCount,yearlyCount = n)
-
 # add in information about placebo, active comparator, both 
 joinedTable <- joinedTable %>% mutate(active_placebo = case_when((str_detect(tolower(group_type_comb), pattern = paste('placebo comparator'))) & (str_detect(tolower(group_type_comb), pattern = paste('active comparator')))~ 'Active & Placebo Present',
                                                                         str_detect(tolower(name_comb),  pattern = paste(placeboStringOnly,collapse="|")) ~ 'Placebo Comparator',
@@ -235,14 +229,67 @@ joinedTable <- joinedTable %>% mutate(active_placebo = case_when((str_detect(tol
                                                                         str_detect(tolower(group_type_comb), pattern = paste('active comparator')) ~ 'Active Comparator',
                                                                         str_detect(tolower(group_type_comb), pattern = paste('placebo comparator')) ~ 'Placebo Comparator'))
 
-
-
-
 joinedTableFix <- joinedTable %>% filter((multi_arm != 'Control Arm Present') & (!is.na(active_placebo))) %>% mutate(multi_arm = case_when((str_detect(tolower(name_comb),pattern = paste(placeboStringOnly,collapse="|"))) |(str_detect(tolower(descrip_comb),pattern = paste(placeboStringOnly,collapse="|"))) ~'Control Arm Present',
                                                                                                                                            str_detect(tolower(designGroup),pattern='control arm present') ~ 'Control Arm Present'))
 
 
 joinedTable$multi_arm[(joinedTable$multi_arm != 'Control Arm Present') & (!is.na(joinedTable$active_placebo))] = joinedTableFix$multi_arm
+
+
+# get rid of sham AV trial
+joinedTable <- joinedTable %>% filter(nct_id != 'NCT03483051')
+
+# do all the manual curation
+
+joinedTable$number_of_arms[joinedTable$nct_id == 'NCT00839891'] = 3 
+joinedTable$active_placebo[joinedTable$nct_id == 'NCT00839891'] = 'Active and Placebo Present'
+joinedTable$intervention_model[joinedTable$nct_id == 'NCT00839891'] = 'Parallel Assignment'
+
+joinedTable$number_of_arms[joinedTable$nct_id == 'NCT00996021'] = 3 
+joinedTable$active_placebo[joinedTable$nct_id == 'NCT00996021'] = 'Active and Placebo Present'
+joinedTable$intervention_model[joinedTable$nct_id == 'NCT00996021'] = 'Crossover Assignment'
+
+joinedTable$number_of_arms[joinedTable$nct_id == 'NCT01328054'] = 2
+joinedTable$active_placebo[joinedTable$nct_id == 'NCT01328054'] = 'Placebo Comparator'
+joinedTable$intervention_model[joinedTable$nct_id == 'NCT01328054'] = 'Parallel Assignment'
+
+joinedTable$number_of_arms[joinedTable$nct_id == 'NCT01667744'] = 2
+joinedTable$active_placebo[joinedTable$nct_id == 'NCT01667744'] = 'Placebo Comparator'
+joinedTable$intervention_model[joinedTable$nct_id == 'NCT01667744'] = 'Parallel Assignment'
+
+joinedTable$number_of_arms[joinedTable$nct_id == 'NCT01959971'] = 2
+joinedTable$active_placebo[joinedTable$nct_id == 'NCT01959971'] = 'Placebo Comparator'
+joinedTable$intervention_model[joinedTable$nct_id == 'NCT01959971'] = 'Crossover Assignment'
+
+joinedTable$number_of_arms[joinedTable$nct_id == 'NCT01968720'] = 2
+joinedTable$active_placebo[joinedTable$nct_id == 'NCT01968720'] = 'Placebo Comparator'
+joinedTable$intervention_model[joinedTable$nct_id == 'NCT01968720'] = 'Crossover Assignment'
+
+joinedTable$number_of_arms[joinedTable$nct_id == 'NCT02153983'] = 3
+joinedTable$active_placebo[joinedTable$nct_id == 'NCT02153983'] = 'Placebo Comparator'
+joinedTable$intervention_model[joinedTable$nct_id == 'NCT02153983'] = 'Parallel Assignment'
+
+joinedTable$number_of_arms[joinedTable$nct_id == 'NCT02424695'] = 2
+joinedTable$active_placebo[joinedTable$nct_id == 'NCT02424695'] = 'Placebo Comparator'
+joinedTable$intervention_model[joinedTable$nct_id == 'NCT02424695'] = 'Crossover Assignment'
+
+joinedTable$number_of_arms[joinedTable$nct_id == 'NCT02496221'] = 2
+joinedTable$active_placebo[joinedTable$nct_id == 'NCT02496221'] = 'Placebo Comparator'
+joinedTable$intervention_model[joinedTable$nct_id == 'NCT02496221'] = 'Crossover Assignment'
+
+joinedTable$number_of_arms[joinedTable$nct_id == 'NCT02497937'] = 2
+joinedTable$active_placebo[joinedTable$nct_id == 'NCT02497937'] = 'Placebo Comparator'
+joinedTable$intervention_model[joinedTable$nct_id == 'NCT02497937'] = 'Crossover Assignment'
+
+joinedTable$number_of_arms[joinedTable$nct_id == 'NCT02593305'] = 2
+joinedTable$active_placebo[joinedTable$nct_id == 'NCT02593305'] = 'Placebo Comparator'
+joinedTable$intervention_model[joinedTable$nct_id == 'NCT02593305'] = 'Crossover Assignment'
+
+joinedTable$number_of_arms[joinedTable$nct_id == 'NCT02906579'] = 2
+joinedTable$active_placebo[joinedTable$nct_id == 'NCT02906579'] = 'Placebo Comparator'
+joinedTable$intervention_model[joinedTable$nct_id == 'NCT02906579'] = 'Parallel Assignment'
+
+# done processing, now do checks, totals, and calculations 
 
 joinedTableCheck <- joinedTable %>% filter((multi_arm != 'Control Arm Present') & (!is.na(active_placebo)))
 
@@ -250,8 +297,13 @@ joinedTableActivePlacebo <- joinedTable %>% group_by(active_placebo) %>% tally()
 
 joinedTableDoubleCheck <- joinedTable %>% filter((multi_arm != 'Control Arm Present') & ((active_placebo == 'Active & Placebo Present') | (active_placebo == 'Active Comparator') | (active_placebo == 'Placebo Comparator') ))
 
-
 joinedTableTripleCheck <- joinedTable %>% filter((multi_arm == 'Control Arm Present') & (is.na(active_placebo)))
+
+# group by year and multi-arm group 
+joinedTableCount <- joinedTable %>% group_by(yearStart,multi_arm) %>%
+  summarize(n=n()) %>%
+  mutate(freq = n/sum(n))
+joinedTableCount <- rename(joinedTableCount,yearlyCount = n)
 
 # calculate statistics
 joinedTableTotals <- joinedTable %>% group_by(multi_arm) %>% tally()
