@@ -13,14 +13,15 @@ library(gridExtra)
 library(cowplot)
 library(here)
 library(sjPlot)
+library(coin)
 
 #########################################
 # boolean values for saving, username and password for accessing AACT database
 
-savePlot = TRUE
+savePlot = TRUE  
 saveData = TRUE
-userAACT="username"
-passwordAACT="password"
+userAACT="djcald"
+passwordAACT="DD968radford"
 
 #########################################
 # create search parameters
@@ -405,6 +406,7 @@ joinedTableSummarizeCountry <- joinedTableSummarizeCountry %>% mutate(totalN = c
 
 joinedTableSummarizeType <- joinedTable %>% group_by(control_status,study_type) %>% tally()
 joinedTableSummarizePhase <- joinedTable %>% group_by(control_status,phase_condensed) %>% tally()
+joinedTableSummarizePhaseMore <- joinedTable %>% group_by(control_status,phase) %>% tally()
 joinedTableSummarizeAgency <- joinedTable %>% group_by(control_status,fundingComb) %>% tally()
 joinedTableSummarizeReported <- joinedTable %>% group_by(control_status,were_results_reported) %>% tally()
 joinedTableSummarizeSite<- joinedTable %>% group_by(control_status,multisite) %>% tally()
@@ -417,46 +419,71 @@ joinedTableUnivHosp <- joinedTable %>% filter((univHosp %in% c('University','Hos
 #########################################
 # statistical testing
 
+joinedTableSampleSizeTest <- joinedTable %>% select(control_status,yearStart,enrollment,multisite,status_condensed,usaLoc,fundingComb,phase,phase_condensed)
+joinedTableSampleSizeTest$control_status <- as.factor(mapvalues(joinedTableSampleSizeTest$control_status,from=c('Control Arm Present','No Control Arm Present'),to=c(1,0)))
+joinedTableSampleSizeTest$yearStart <- as.integer(mapvalues(joinedTableSampleSizeTest$yearStart,from=c(min(joinedTableSampleSizeTest$yearStart):max(joinedTableSampleSizeTest$yearStart)),to=c(0:(length(unique(joinedTableSampleSizeTest$yearStart))-1))))
+which(! complete.cases(joinedTableSampleSizeTest))
+
+medianSampleSize <- median_test(enrollment~control_status,data = joinedTableSampleSizeTest)
+
 yearlyCount = joinedTableCount$yearlyCount
 lengthYC= length(yearlyCount)
 
-stat_model <- lm(freq~yearStart,joinedTableCount)
+stat_model <- glm(control_status~yearStart,family=binomial(link="logit"),data=joinedTableSampleSizeTest)
 summary(stat_model)
+confint(stat_model)
 tab_model(stat_model)
 
-stat_model_group <- lm(freq~yearStart+control_status,joinedTableCount)
+stat_model_group <- glm(control_status~yearStart+multisite+status_condensed+usaLoc+phase_condensed+fundingComb,family=binomial(link="logit"),data=joinedTableSampleSizeTest)
 summary(stat_model_group)
 tab_model(stat_model_group)
+anova(stat_model_group,test="Chisq")
+confint(stat_model_group)
+
 
 tableCountry = table(joinedTable$usaLoc,joinedTable$control_status,useNA = 'ifany')
 tableCountryStats <- sapply(1:nrow(tableCountry),function(z) prop.test(tableCountry[z,, drop = TRUE], n = colSums(tableCountry)))
+chisq.test(tableCountry)
 
 tableControlArm = table(joinedTable$active_placebo,joinedTable$control_status,useNA='ifany')
 tableControlArmStats <- sapply(1:nrow(tableControlArm),function(z) prop.test(tableControlArm[z,, drop = TRUE], n = colSums(tableControlArm)))
 
+
+
 tableStatus = table(joinedTable$status_condensed,joinedTable$control_status,useNA = 'ifany')
 tableStatusStats <- sapply(1:nrow(tableStatus),function(z) prop.test(tableStatus[z,, drop = TRUE], n = colSums(tableStatus)))
+chisq.test(tableStatus)
 
 tableSite = table(joinedTable$multisite,joinedTable$control_status,useNA = 'ifany')
+Table[is.na(data_1)] <- 0
 tableSiteStats <- sapply(1:nrow(tableSite),function(z) prop.test(tableSite[z,, drop = TRUE], n = colSums(tableSite)))
+chisq.test(tableSite)
+
 
 tableFunder = table(joinedTable$fundingComb,joinedTable$control_status,useNA = 'ifany')
 tableFunderStats <- sapply(1:nrow(tableFunder),function(z) prop.test(tableFunder[z,, drop = TRUE], n = colSums(tableFunder)))
+chisq.test(tableFunder)
+
 
 tablePhase = table(joinedTable$phase_condensed,joinedTable$control_status,useNA = 'ifany')
 tablePhaseStats <- sapply(1:nrow(tablePhase),function(z) prop.test(tablePhase[z,, drop = TRUE], n = colSums(tablePhase)))
+chisq.test(tablePhase)
 
-tableUnivHosp = table(joinedTable$univHosp,joinedTable$control_status,useNA = 'ifany')
-tableUnivHospStats <- sapply(1:nrow(tableUnivHosp),function(z) prop.test(tableUnivHosp[z,, drop = TRUE], n = colSums(tableUnivHosp)))
 
 tablePub = table(joinedTable$pubCountBool,joinedTable$control_status,useNA = 'ifany')
 tablePubStats <- sapply(1:nrow(tablePub),function(z) prop.test(tablePub[z,, drop = TRUE], n = colSums(tablePub)))
+chisq.test(tablePub)
+
 
 tableResults = table(joinedTable$were_results_reported,joinedTable$control_status,useNA = 'ifany')
 tableResultsStats <- sapply(1:nrow(tableResults),function(z) prop.test(tableResults[z,, drop = TRUE], n = colSums(tableResults)))
+chisq.test(tableResults)
+
 
 tableYearlyCount = table(joinedTable$yearStart,joinedTable$control_status,useNA='ifany')
 tableYearlyCountStats <- sapply(1:nrow(tableYearlyCount),function(z) prop.test(tableYearlyCount[z,, drop = TRUE], n = colSums(tableYearlyCount)))
+chisq.test(tableYearlyCount)
+
 
 joinedTableSummarizeCountryStat <- joinedTable %>% group_by(control_status,usaLoc) %>% filter(control_status != 'Single-Arm Trial') %>% tally() %>% mutate(lower_ci = prop.test(control_status,n,conf.level=0.95)$conf.int[1])
 joinedTableSummarizeTypeStat <- joinedTable %>% group_by(control_status,study_type) %>% tally()
@@ -471,19 +498,19 @@ joinedTableMedianNumbersStat <- joinedTable %>% group_by(control_status) %>% sum
 
 ########################
 if (saveData){
-  saveRDS(joinedTable, file = "controlArmRdata_9_23_2020.rds")
-  write.csv(designTrialExamineExperimentalOnly,'experimentalOnly_9_23_2020.csv')
-  write.csv(joinedTable,'controlArmTableTotal_9_23_2020.csv')
-  write.csv(joinedTableDiverseDiscontinued,'controlArmTableDiscDiverse_9_23_2020.csv')
-  write.csv(joinedTableSummarizeInterv,'controlArmTableInterv_9_23_2020.csv')
-  write.csv(joinedTableSummarizeType,'controlArmTableType_9_23_2020.csv')
-  write.csv(joinedTableSummarizePhase,'controlArmTablePhase_9_23_2020.csv')
-  write.csv(joinedTableSummarizeAgency,'controlArmTableAgency_9_23_2020.csv')
-  write.csv(joinedTableSummarizeReported,'controlArmTableReported_9_23_2020.csv')
-  write.csv(joinedTableSummarizeSite,'controlArmTableSite_9_23_2020.csv')
-  write.csv(joinedTableSummarizeStatus,'controlArmTableStatus_9_23_2020.csv')
-  write.csv(joinedTableSummarizeOverallStatus,'controlArmTableOverallStatus_9_23_2020.csv')
-  write.csv(joinedTableSummarizePubCount,'controlArmTablePubCount_9_23_2020.csv')
+  saveRDS(joinedTable, file = "controlArmRdata_10_11_2020.rds")
+  write.csv(designTrialExamineExperimentalOnly,'experimentalOnly_10_11_2020.csv')
+  write.csv(joinedTable,'controlArmTableTotal_10_11_2020.csv')
+  write.csv(joinedTableDiverseDiscontinued,'controlArmTableDiscDiverse_10_11_2020.csv')
+  write.csv(joinedTableSummarizeInterv,'controlArmTableInterv_10_11_2020.csv')
+  write.csv(joinedTableSummarizeType,'controlArmTableType_10_11_2020.csv')
+  write.csv(joinedTableSummarizePhase,'controlArmTablePhase_10_11_2020.csv')
+  write.csv(joinedTableSummarizeAgency,'controlArmTableAgency_10_11_2020.csv')
+  write.csv(joinedTableSummarizeReported,'controlArmTableReported_10_11_2020.csv')
+  write.csv(joinedTableSummarizeSite,'controlArmTableSite_10_11_2020.csv')
+  write.csv(joinedTableSummarizeStatus,'controlArmTableStatus_10_11_2020.csv')
+  write.csv(joinedTableSummarizeOverallStatus,'controlArmTableOverallStatus_10_11_2020.csv')
+  write.csv(joinedTableSummarizePubCount,'controlArmTablePubCount_10_11_2020.csv')
 }
 
 #########################################
@@ -498,7 +525,7 @@ pInd<-ggplot(joinedTableCount, aes(x=yearStart,y=yearlyCount, group=control_stat
   scale_color_jama() 
 print(pInd)
 if (savePlot){
-  ggsave("trialsByYearMultiArm_9_23_2020.png", units="in", width=6, height=4, dpi=600)
+  ggsave("trialsByYearMultiArm_10_11_2020.png", units="in", width=6, height=4, dpi=600)
 }
 
 pHist<-ggplot(joinedTable, aes(x=number_of_arms,color=control_status,fill=control_status)) +
@@ -508,6 +535,6 @@ pHist<-ggplot(joinedTable, aes(x=number_of_arms,color=control_status,fill=contro
   guides(color=FALSE)
 print(pHist)
 if (savePlot){
-  ggsave("trialsByYearHist_9_23_2020.png", units="in", width=5, height=4, dpi=600)
+  ggsave("trialsByYearHist_10_11_2020.png", units="in", width=5, height=4, dpi=600)
 }
 
