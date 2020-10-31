@@ -20,8 +20,8 @@ library(coin)
 
 savePlot = TRUE  
 saveData = TRUE
-userAACT="djcald"
-passwordAACT="DD968radford"
+userAACT="username"
+passwordAACT="password"
 
 #########################################
 # create search parameters
