@@ -14,14 +14,15 @@ library(cowplot)
 library(here)
 library(sjPlot)
 library(coin)
+library(emmeans)
 
 #########################################
 # boolean values for saving, username and password for accessing AACT database
 
-savePlot = TRUE  
+savePlot = TRUE
 saveData = TRUE
-userAACT="username"
-passwordAACT="password"
+userAACT="djcald"
+passwordAACT="DD968radford"
 
 #########################################
 # create search parameters
@@ -34,16 +35,33 @@ placeboStringOnly = c('placebo')
 standardCareString = c('standard of care','usual care')
 
 # terms to search within conditions field
-diseaseTerms = c('cardiac', 'heart', 'cardiomyopathy', 'cardiopulmonary resuscitation',
-'mechanical circulatory support', 'ejection fraction', 'myocardial', 'arrhythmia', 'atrial fibrillation',
-'ventricular fibrillation', 'tachycardia', 'bradycardia', 'accessory pathway', 'left atrial appendage',
+diseaseTerms = tolower(c('cardiac', 'heart', 'cardiomyopathy', 'cardiopulmonary resuscitation','cardiac arrest',
+'mechanical circulatory support', 'ejection fraction', 'myocardial', 'arrhythmia','arrhythmias, cardiac', 'atrial fibrillation',
+'ventricular fibrillation', 'tachycardia', 'bradycardia', 'accessory pathway', 'left atrial appendage','cardiac surgery',
 'anticoagulation', 'antiplatelet', 'antithrombotic', 'chest pain', 'acute coronary syndrome', 'ST-elevation MI',
 'non-ST-elevation MI', 'artery disease', 'cholesterol', 'lipid', 'triglyceride', 'statin', 'hypertension',
-'blood pressure', 'cerebrovascular', 'transient ischemic event', 'ischemic stroke')
+'blood pressure','ambulatory blood pressure','blood pressure monitoring, ambulatory','blood pressure measurement', 'cerebrovascular', 'transient ischemic event', 'ischemic stroke','myocardial infarction',
+'st-elevation myocardial infarction','st-segment elevation myocardial infarction','acute myocardial infarction',
+'non-st elevation myocardial infarction','nstemi - non-st segment elevation mi', 'non-st elevation myocardial infarction',
+'non-st elevated myocardial infarction','non st segment elevation acute coronary syndrome','acute st segment elevation myocardial infarction',
+'stemi with multivessel coronary disease','nste-acs (nstemi and ua)','non-stemi acute coronary syndrome','stemi (ste-acs)',
+'acs - acute coronary syndrome','acute coronary artery thrombosis (diagnosis)','acute coronary syndrom','acute coronary syndrome (acs)',
+'acute coronary syndrome patients with diabetes after pci'))
+
+# terms to search within conditions field
+diseaseTerms = tolower(c('cardiac', 'heart', 'cardiomyopathy', 'cardiopulmonary resuscitation','arrest',
+                         'mechanical circulatory support', 'ejection fraction', 'myocardial', 'arrhythmia', 'atrial fibrillation',
+                         'ventricular fibrillation', 'tachycardia', 'bradycardia', 'accessory pathway', 'left atrial appendage',
+                         'anticoagulation', 'antiplatelet', 'antithrombotic', 'chest pain', 'acute coronary syndrome', 'ST-elevation',
+                         'non-ST-elevation', 'artery disease', 'cholesterol', 'lipid', 'triglyceride', 'statin', 'hypertension',
+                         'blood pressure', 'cerebrovascular', 'transient ischemic event', 'ischemic stroke',
+                         'non-st elevation','nstemi','non-st elevated','non st segment','acute st segment','st segment',
+                         'stemi ','nste-acs','non-stemi','stemi (ste-acs)',
+                         'acs - acute coronary syndrome','acute coronary artery'))
+
 
 # terms to exclude, since often glaucoma trials are included with hypertension studies
 termsSearchCondTitleExclude = c('glaucoma','ocular hypertension','opthalm')
-
 
 #########################################
 
@@ -55,8 +73,21 @@ con <- dbConnect(drv, dbname="aact",host="aact-db.ctti-clinicaltrials.org",user=
 
 study_tbl_conditions = tbl(src=con, 'conditions')
 
-condsCond <- study_tbl_conditions %>% select(nct_id,downcase_name) %>% filter(downcase_name %in% diseaseTerms) %>% collect
-condsCond = condsCond %>% group_by(nct_id) %>% summarize(condsPaste = paste(downcase_name,collapse=", ")) %>% collect()
+# original way
+#condsCond <- study_tbl_conditions %>% select(nct_id,downcase_name) %>% filter(downcase_name %in% diseaseTerms) %>% collect
+#condsCond = condsCond %>% group_by(nct_id) %>% summarize(condsPaste = paste(downcase_name,collapse=", ")) %>% collect()
+
+
+# new way
+condsCond <- study_tbl_conditions %>% select(nct_id,downcase_name) %>% collect()
+condsCond <- condsCond %>% group_by(nct_id) %>% summarize(condsPaste = paste(downcase_name,collapse=", ")) %>% collect()
+condsCond <- condsCond %>% filter(str_detect(tolower(condsPaste),pattern = paste(diseaseTerms,collapse="|")) & !str_detect(tolower(condsPaste),pattern = paste(termsSearchCondTitleExclude,collapse="|"))) 
+
+study_tbl_conditions_other = tbl(src=con, 'browse_conditions')
+
+condsCond_other <- study_tbl_conditions_other %>% select(nct_id,mesh_term) %>% collect
+#condsCond_other = condsCond_other %>% group_by(nct_id) %>% summarize(condsPaste = paste(mesh_term,collapse=", ")) %>% collect()
+
 
 study_tbl = tbl(src=con,'studies')
 #filter_dates <- study_tbl %>% select(official_title,study_first_posted_date,verification_date,start_date,start_month_year,nct_id,phase,last_known_status,study_type,enrollment,overall_status) %>% filter(study_type == 'Interventional')  %>% collect()
@@ -108,13 +139,13 @@ designTrialSummaryCheck <- designTrial %>% group_by(designGroup) %>% tally()
 designTrialCollapsed = design_groups %>% mutate(designGroup = case_when(str_detect(tolower(group_type_comb), pattern = paste('placebo comparator')) ~ 'Control Arm Present',
                                                                str_detect(tolower(group_type_comb), pattern = paste('active comparator')) ~ 'Control Arm Present',
                                                                str_detect(tolower(group_type_comb), pattern = paste('sham')) ~ 'Control Arm Present',
-                                                               str_detect(tolower(group_type_comb), pattern = paste('treatment comparison')) ~ 'No Control Arm Present',
                                                                str_detect(tolower(group_type_comb), pattern = paste('active')) ~ 'Control Arm Present',
-                                                               str_detect(tolower(group_type_comb), pattern = paste('case')) ~ 'No Control Arm Present',
                                                                str_detect(tolower(group_type_comb), pattern = paste('control')) ~ 'Control Arm Present',
-                                                               str_detect(tolower(group_type_comb), pattern = paste('other')) ~ 'No Control Arm Present',
-                                                               str_detect(tolower(group_type_comb), pattern = paste('no intervention')) ~ 'No Control Arm Present',
+                                                               str_detect(tolower(group_type_comb), pattern = paste('no intervention')) ~ 'Control Arm Present',
                                                                str_detect(tolower(group_type_comb), pattern = paste('null')) ~ 'No Control Arm Present',
+                                                               str_detect(tolower(group_type_comb), pattern = paste('treatment comparison')) ~ 'No Control Arm Present',
+                                                               str_detect(tolower(group_type_comb), pattern = paste('case')) ~ 'No Control Arm Present',
+                                                               str_detect(tolower(group_type_comb), pattern = paste('other')) ~ 'No Control Arm Present',
                                                                str_detect(tolower(group_type_comb), pattern = paste('experimental')) ~ 'Experimental Only'))
 
 designTrialCollapsedSummaryCheck <- designTrialCollapsed %>% group_by(designGroup) %>% tally()
@@ -223,7 +254,7 @@ joinedTable$multi_arm[is.na(joinedTable$number_of_arms) & joinedTable$interventi
 # fix multiple experimental arms that have placebo listed under interventions 
 joinedTable$multi_arm[joinedTable$number_of_arms > 1 & joinedTable$designGroup == 'Experimental Only' & str_detect(tolower(joinedTable$name_comb), pattern = paste(placeboString,collapse="|"))] = 'Control Arm Present'
 
-joinedTable$multi_arm[joinedTable$active_placebo == 'Placebo Comparator' | joinedTable$active_placebo == 'Active & Placebo Present' | joinedTable$active_placebo == 'Active Comparator']= 'Control Arm Present'
+joinedTable$multi_arm[joinedTable$active_placebo == 'No Intervention Comparator' |joinedTable$active_placebo == 'Placebo Comparator' | joinedTable$active_placebo == 'Active & Placebo Present' | joinedTable$active_placebo == 'Active Comparator']= 'Control Arm Present'
 
 
 joinedTable$multi_arm[is.na(joinedTable$number_of_arms) & (joinedTable$intervention_model == 'Parallel Assignment' | joinedTable$intervention_model == 'Crossover Assignment' | joinedTable$intervention_model == 'Factorial Group Assignment' | joinedTable$intervention_model == 'Sequential Assignment') & str_detect(tolower(joinedTable$name_comb), pattern = paste(placeboString,collapse="|"))] = 'Control Arm Present'
@@ -247,7 +278,8 @@ joinedTable <- joinedTable %>% mutate(active_placebo = case_when((str_detect(tol
                                                                         str_detect(tolower(name_comb),  pattern = paste(standardCareString,collapse="|")) ~ 'Placebo Comparator',
                                                                         str_detect(tolower(group_type_comb), pattern = paste('active comparator')) ~ 'Active Comparator',
                                                                         str_detect(tolower(group_type_comb), pattern = paste('placebo comparator')) ~ 'Placebo Comparator',
-                                                                        str_detect(tolower(group_type_comb),pattern=paste('sham comparator'))~ 'Placebo Comparator'))
+                                                                        str_detect(tolower(group_type_comb),pattern=paste('sham comparator'))~ 'Placebo Comparator',
+                                                                        str_detect(tolower(group_type_comb),pattern=paste('no intervention'))~ 'No Intervention Comparator'))
 
 joinedTableFix <- joinedTable %>% filter((multi_arm != 'Control Arm Present') & (!is.na(active_placebo))) %>% mutate(multi_arm = case_when((str_detect(tolower(name_comb),pattern = paste(placeboStringOnly,collapse="|"))) |(str_detect(tolower(descrip_comb),pattern = paste(placeboStringOnly,collapse="|"))) ~'Control Arm Present',
                                                                                                                                            str_detect(tolower(designGroup),pattern='control arm present') ~ 'Control Arm Present'))
@@ -344,6 +376,13 @@ joinedTable$number_of_arms[joinedTable$nct_id == 'NCT02906579'] = 2
 joinedTable$active_placebo[joinedTable$nct_id == 'NCT02906579'] = 'Placebo Comparator'
 joinedTable$intervention_model[joinedTable$nct_id == 'NCT02906579'] = 'Crossover Assignment'
 
+joinedTable$number_of_arms[joinedTable$nct_id == 'NCT01093235'] = 2
+joinedTable$active_placebo[joinedTable$nct_id == 'NCT01093235'] = 'Active Comparator'
+joinedTable$intervention_model[joinedTable$nct_id == 'NCT01093235'] = 'Parallel Assignment'
+joinedTable$intervention_model[joinedTable$nct_id == 'NCT01093235'] = 'Parallel Assignment'
+joinedTable$multi_arm[joinedTable$nct_id == 'NCT01093235'] = 'Control Arm Present' 
+
+
 # create new group for control group present vs absent (lumping single arm in)
 joinedTable <- joinedTable %>% mutate(control_status = case_when(multi_arm=='Control Arm Present' ~ 'Control Arm Present',
                                                                  ((multi_arm=='Single-Arm Trial') | (multi_arm=='No Control Arm Present')) ~ 'No Control Arm Present'))
@@ -361,6 +400,9 @@ joinedTable <- joinedTable %>% mutate(status_condensed = case_when(((overall_sta
                                                                   overall_status == 'Completed' ~ 'Completed',
                                                                   TRUE ~ 'Unknown'))
 
+# select phase 3/4
+
+joinedTable <- joinedTable %>% filter((phase_condensed=='Phase 4') | (phase_condensed=='Phase 3'))
 
 
 # create column for phase 
@@ -505,19 +547,19 @@ chisq.test(tableYearlyCount)
 
 ########################
 if (saveData){
-  saveRDS(joinedTable, file = "controlArmRdata_10_31_2020.rds")
-  write.csv(designTrialExamineExperimentalOnly,'experimentalOnly_10_31_2020.csv')
-  write.csv(joinedTable,'controlArmTableTotal_10_31_2020.csv')
-  write.csv(joinedTableDiverseDiscontinued,'controlArmTableDiscDiverse_10_31_2020.csv')
-  write.csv(joinedTableSummarizeInterv,'controlArmTableInterv_10_31_2020.csv')
-  write.csv(joinedTableSummarizeType,'controlArmTableType_10_31_2020.csv')
-  write.csv(joinedTableSummarizePhase,'controlArmTablePhase_10_31_2020.csv')
-  write.csv(joinedTableSummarizeAgency,'controlArmTableAgency_10_31_2020.csv')
-  write.csv(joinedTableSummarizeReported,'controlArmTableReported_10_31_2020.csv')
-  write.csv(joinedTableSummarizeSite,'controlArmTableSite_10_31_2020.csv')
-  write.csv(joinedTableSummarizeStatus,'controlArmTableStatus_10_31_2020.csv')
-  write.csv(joinedTableSummarizeOverallStatus,'controlArmTableOverallStatus_10_31_2020.csv')
-  write.csv(joinedTableSummarizePubCount,'controlArmTablePubCount_10_31_2020.csv')
+  saveRDS(joinedTable, file = "controlArmRdata_11_14_2020.rds")
+  write.csv(designTrialExamineExperimentalOnly,'experimentalOnly_11_14_2020.csv')
+  write.csv(joinedTable,'controlArmTableTotal_11_14_2020.csv')
+  write.csv(joinedTableDiverseDiscontinued,'controlArmTableDiscDiverse_11_14_2020.csv')
+  write.csv(joinedTableSummarizeInterv,'controlArmTableInterv_11_14_2020.csv')
+  write.csv(joinedTableSummarizeType,'controlArmTableType_11_14_2020.csv')
+  write.csv(joinedTableSummarizePhase,'controlArmTablePhase_11_14_2020.csv')
+  write.csv(joinedTableSummarizeAgency,'controlArmTableAgency_11_14_2020.csv')
+  write.csv(joinedTableSummarizeReported,'controlArmTableReported_11_14_2020.csv')
+  write.csv(joinedTableSummarizeSite,'controlArmTableSite_11_14_2020.csv')
+  write.csv(joinedTableSummarizeStatus,'controlArmTableStatus_11_14_2020.csv')
+  write.csv(joinedTableSummarizeOverallStatus,'controlArmTableOverallStatus_11_14_2020.csv')
+  write.csv(joinedTableSummarizePubCount,'controlArmTablePubCount_11_14_2020.csv')
 }
 
 #########################################
@@ -532,7 +574,7 @@ pInd<-ggplot(joinedTableCount, aes(x=yearStart,y=yearlyCount, group=control_stat
   scale_color_jama() 
 print(pInd)
 if (savePlot){
-  ggsave("trialsByYearMultiArm_10_31_2020.png", units="in", width=6, height=4, dpi=600)
+  ggsave("trialsByYearMultiArm_11_14_2020.png", units="in", width=6, height=4, dpi=600)
 }
 
 pHist<-ggplot(joinedTable, aes(x=number_of_arms,color=control_status,fill=control_status)) +
@@ -542,6 +584,6 @@ pHist<-ggplot(joinedTable, aes(x=number_of_arms,color=control_status,fill=contro
   guides(color=FALSE)
 print(pHist)
 if (savePlot){
-  ggsave("trialsByYearHist_10_31_2020.png", units="in", width=5, height=4, dpi=600)
+  ggsave("trialsByYearHist_11_14_2020.png", units="in", width=5, height=4, dpi=600)
 }
 
