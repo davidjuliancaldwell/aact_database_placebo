@@ -21,8 +21,8 @@ library(emmeans)
 
 savePlot = TRUE
 saveData = TRUE
-userAACT="USERNAME"
-passwordAACT="PASSWORD"
+userAACT="djcald"
+passwordAACT="DD968radford"
 
 #########################################
 # create search parameters
@@ -35,7 +35,7 @@ placeboStringOnly = c('placebo')
 standardCareString = c('standard of care','usual care')
 
 
-diseaseTerms = tolower(c('cardiomyopathies', 'cardiopulmonary resuscitation','mechanical circulatory support','heart failure’,‘heart failure with reduced ejection fraction',
+diseaseTerms = tolower(c('cardiomyopathies', 'cardiopulmonary resuscitation','mechanical circulatory support','heart failure','heart failure with reduced ejection fraction',
                          'heart failure with preserved ejection fraction', 'myocardial infarction', 'myocardial ischemia', 'arrhythmia',
                          'atrial arrhythmia', 'ventricular arrhythmia', 'atrial fibrillation', 'atrial flutter', 'ventricular flutter',
                          'ventricular fibrillation', 'ventricular tachycardia', 'atrial tachycardia', 'bradycardia', 'left atrial appendage thrombosis',
