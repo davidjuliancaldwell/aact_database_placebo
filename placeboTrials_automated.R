@@ -398,6 +398,8 @@ joinedTableCountCat <- joinedTable %>% mutate(yearStart = as.factor(yearStart)) 
   mutate(freq = n/sum(n))
 joinedTableCountCat <- rename(joinedTableCountCat,yearlyCount = n)
 
+
+
 joinedTableCat <- joinedTable %>% mutate(yearStart = as.factor(yearStart)) %>% 
   mutate(control_status = recode(control_status,"No Control Arm Present" = 0,"Control Arm Present"=1))
 
@@ -431,8 +433,11 @@ tab_model(stat_model_group)
 anova(stat_model_group,test="Chisq")
 confint(stat_model_group)
 
+joinedActivePlacebo <- joinedTableActivePlacebo %>% mutate(per = round(prop.table(n)*100,1))
+
 
 tableCountry = table(joinedTable$usaLoc,joinedTable$control_status,useNA = 'ifany')
+tableCountryFreq <- joinedTableSummarizeCountry %>% group_by(control_status) %>% mutate(per = round(prop.table(n)*100,1))
 tableCountryStats <- sapply(1:nrow(tableCountry),function(z) prop.test(tableCountry[z,, drop = TRUE], n = colSums(tableCountry)))
 chisq.test(tableCountry)
 
@@ -442,30 +447,36 @@ tableControlArmStats <- sapply(1:nrow(tableControlArm),function(z) prop.test(tab
 
 
 tableStatus = table(joinedTable$status_condensed,joinedTable$control_status,useNA = 'ifany')
+tableStatusFreq <- joinedTableSummarizeOverallStatus %>% group_by(control_status) %>% mutate(per = round(prop.table(n)*100,1))
 tableStatusStats <- sapply(1:nrow(tableStatus),function(z) prop.test(tableStatus[z,, drop = TRUE], n = colSums(tableStatus)))
 chisq.test(tableStatus)
 
 tableSite = table(joinedTable$multisite,joinedTable$control_status,useNA = 'ifany')
+tableSiteFreq <- joinedTableSummarizeSite %>% group_by(control_status) %>% mutate(per = round(prop.table(n)*100,1))
 tableSiteStats <- sapply(1:nrow(tableSite),function(z) prop.test(tableSite[z,, drop = TRUE], n = colSums(tableSite)))
 chisq.test(tableSite)
 
 
 tableFunder = table(joinedTable$fundingComb,joinedTable$control_status,useNA = 'ifany')
+tableFunderFreq <- joinedTableSummarizeAgency %>% group_by(control_status) %>% mutate(per = round(prop.table(n)*100,1))
 tableFunderStats <- sapply(1:nrow(tableFunder),function(z) prop.test(tableFunder[z,, drop = TRUE], n = colSums(tableFunder)))
 chisq.test(tableFunder)
 
 
 tablePhase = table(joinedTable$phase_condensed,joinedTable$control_status,useNA = 'ifany')
+tablePhaseFreq <- joinedTableSummarizePhase %>% group_by(control_status) %>% mutate(per = round(prop.table(n)*100,1))
 tablePhaseStats <- sapply(1:nrow(tablePhase),function(z) prop.test(tablePhase[z,, drop = TRUE], n = colSums(tablePhase)))
 chisq.test(tablePhase)
 
 
 tablePub = table(joinedTable$pubCountBool,joinedTable$control_status,useNA = 'ifany')
+tablePubFreq <- joinedTableSummarizePubCount %>% group_by(control_status) %>% mutate(per = round(prop.table(n)*100,1))
 tablePubStats <- sapply(1:nrow(tablePub),function(z) prop.test(tablePub[z,, drop = TRUE], n = colSums(tablePub)))
 chisq.test(tablePub)
 
 
 tableResults = table(joinedTable$were_results_reported,joinedTable$control_status,useNA = 'ifany')
+tableResultsFreq <- joinedTableSummarizeReported %>% group_by(control_status) %>% mutate(per = round(prop.table(n)*100,1))
 tableResultsStats <- sapply(1:nrow(tableResults),function(z) prop.test(tableResults[z,, drop = TRUE], n = colSums(tableResults)))
 chisq.test(tableResults)
 
